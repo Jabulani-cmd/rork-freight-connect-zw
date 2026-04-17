@@ -1,0 +1,10 @@
+{
+  "$schema": "https://rork.com/schema/rork.json",
+  "apps": [
+    {
+      "name": "Freight Connect ZW",
+      "path": "expo",
+      "framework": "react-native"
+    }
+  ]
+}
