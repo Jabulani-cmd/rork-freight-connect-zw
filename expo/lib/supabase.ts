@@ -1,12 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
+// Hardcoded credentials (use your own)
+const supabaseUrl = 'https://jjbhszstljqkpchosfgj.supabase.co';
+const supabaseAnonKey = 'sb_publishable_7Uvf7YigG1W2b16UVpZ9OQ_63nbZRXz';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -17,6 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Keep your existing Typescript types (if any)
 export type Tables = {
   profiles: {
     id: string;
