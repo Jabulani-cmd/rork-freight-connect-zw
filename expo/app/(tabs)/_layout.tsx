@@ -1,22 +1,30 @@
-import { Stack } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Tabs } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
+import { Redirect } from 'expo-router';
+import { useSubscriptionCheck } from '../../hooks/useSubscriptionCheck';
 
-const queryClient = new QueryClient();
+export default function TabsLayout() {
+  const { hasAccess, loading } = useSubscriptionCheck();
 
-export default function RootLayout() {
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!hasAccess) {
+    return <Redirect href="/subscription" />;
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="subscription" />
-        </Stack>
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="tracking" />
+      <Tabs.Screen name="drafts" />
+      <Tabs.Screen name="agent" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
   );
 }
