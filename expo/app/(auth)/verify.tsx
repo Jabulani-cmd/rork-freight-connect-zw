@@ -1,4 +1,3 @@
-// app/(auth)/verify.tsx
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +11,6 @@ export default function VerifyScreen() {
   const [role, setRole] = useState<'cargo_owner' | 'driver' | null>(null);
   const [vehicleData, setVehicleData] = useState<any>(null);
 
-  // Load onboarding data
   useEffect(() => {
     const loadData = async () => {
       const savedRole = await AsyncStorage.getItem('onboardingRole');
@@ -37,7 +35,6 @@ export default function VerifyScreen() {
     }
     setLoading(true);
     try {
-      // Verify OTP
       const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
         phone: phone!,
         token: otp,
@@ -48,11 +45,9 @@ export default function VerifyScreen() {
       const userId = authData.user?.id;
       if (!userId) throw new Error('User ID missing');
 
-      // Trial dates
       const trialEnd = new Date();
       trialEnd.setDate(trialEnd.getDate() + 7);
 
-      // Insert profile
       const { error: profileError } = await supabase.from('profiles').insert({
         id: userId,
         phone_number: phone,
@@ -63,24 +58,19 @@ export default function VerifyScreen() {
       });
       if (profileError) throw profileError;
 
-      // Insert role-specific profile
       if (role === 'driver' && vehicleData) {
-        const { error: driverError } = await supabase.from('driver_profiles').insert({
+        await supabase.from('driver_profiles').insert({
           id: userId,
           vehicle_type: vehicleData.vehicleType,
           vehicle_capacity_kg: vehicleData.capacityKg,
-          // license_photo_url, insurance_photo_url can be added later
         });
-        if (driverError) throw driverError;
       } else if (role === 'cargo_owner') {
         await supabase.from('cargo_owner_profiles').insert({ id: userId });
       }
 
-      // Clear onboarding storage
       await AsyncStorage.multiRemove(['onboardingRole', 'driverVehicle', 'trialStarted']);
-
       Alert.alert('Success', 'Your 7-day free trial has started!');
-      router.replace('/(tabs)/job'); // or appropriate start screen
+      router.replace('/(tabs)/job');
     } catch (err: any) {
       Alert.alert('Verification failed', err.message);
     } finally {
