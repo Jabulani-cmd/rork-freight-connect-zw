@@ -1,327 +1,117 @@
-import React, { useState, useRef, useEffect } from "react";
-import { StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-import { Text, Button, Snackbar } from "react-native-paper";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "@/lib/supabase";
-import { useStore } from "@/lib/store";
-import { Colors } from "@/constants/colors";
-import Logo from "@/components/Logo";
-import ScreenBackground from "@/components/ScreenBackground";
+// app/(auth)/verify.tsx
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../lib/supabase';
 
 export default function VerifyScreen() {
-  const { phone, demo, role } = useLocalSearchParams<{ phone: string; demo?: string; role?: string }>();
-  const preSelectedRole = role === "driver" || role === "cargo_owner" ? role : null;
-  const isDemo = demo === "1" || phone === "+263712345678";
-  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(60);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-  const router = useRouter();
-  const { setSession, setUser } = useStore();
+  const [role, setRole] = useState<'cargo_owner' | 'driver' | null>(null);
+  const [vehicleData, setVehicleData] = useState<any>(null);
 
+  // Load onboarding data
   useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
+    const loadData = async () => {
+      const savedRole = await AsyncStorage.getItem('onboardingRole');
+      if (savedRole === 'cargo_owner' || savedRole === 'driver') setRole(savedRole);
+      if (savedRole === 'driver') {
+        const vehicleJson = await AsyncStorage.getItem('driverVehicle');
+        if (vehicleJson) setVehicleData(JSON.parse(vehicleJson));
+      }
+    };
+    loadData();
+  }, []);
+
+  const verifyAndComplete = async () => {
+    if (!otp || otp.length < 6) {
+      Alert.alert('Error', 'Please enter the 6-digit OTP');
+      return;
     }
-  }, [countdown]);
-
-  const handleCodeChange = (text: string, index: number) => {
-    const newCode = [...code];
-    newCode[index] = text;
-    setCode(newCode);
-
-    if (text.length === 1 && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+    if (!role) {
+      Alert.alert('Error', 'Please go back and select your role');
+      router.replace('/onboarding/role');
+      return;
     }
-
-    if (newCode.every((digit) => digit.length === 1)) {
-      handleVerify(newCode.join(""));
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = async (fullCode: string) => {
-    if (fullCode.length !== 6) return;
-
     setLoading(true);
-    setError("");
-
     try {
-      if (isDemo) {
-        console.log("[Verify] Demo login flow");
-        if (fullCode !== "123456") {
-          throw new Error("Demo code is 123456");
-        }
-        const demoUserId = "demo-user-263712345678";
-        const demoSession = {
-          access_token: "demo-token",
-          refresh_token: "demo-refresh",
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          token_type: "bearer",
-          user: {
-            id: demoUserId,
-            phone: phone.replace("+", ""),
-            app_metadata: {},
-            user_metadata: {},
-            aud: "authenticated",
-            created_at: new Date().toISOString(),
-          },
-        } as any;
-        setSession(demoSession);
-        setUser(demoSession.user);
-        if (preSelectedRole === "driver") {
-          router.replace("/onboarding/vehicle");
-        } else if (preSelectedRole === "cargo_owner") {
-          router.replace("/(tabs)");
-        } else {
-          router.replace("/onboarding/role");
-        }
-        return;
-      }
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone,
-        token: fullCode,
-        type: "sms",
+      // Verify OTP
+      const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
+        phone: phone!,
+        token: otp,
+        type: 'sms',
       });
+      if (verifyError) throw verifyError;
 
-      if (error) throw error;
+      const userId = authData.user?.id;
+      if (!userId) throw new Error('User ID missing');
 
-      setSession(data.session);
-      setUser(data.user);
+      // Trial dates
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 7);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", data.user!.id)
-        .single();
+      // Insert profile
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: userId,
+        phone_number: phone,
+        role: role,
+        trial_start_date: new Date().toISOString(),
+        trial_end_date: trialEnd.toISOString(),
+        subscription_status: 'trial',
+      });
+      if (profileError) throw profileError;
 
-      if (!profile) {
-        await supabase.from("profiles").insert({
-          id: data.user!.id,
-          phone: phone,
-          role: preSelectedRole,
+      // Insert role-specific profile
+      if (role === 'driver' && vehicleData) {
+        const { error: driverError } = await supabase.from('driver_profiles').insert({
+          id: userId,
+          vehicle_type: vehicleData.vehicleType,
+          vehicle_capacity_kg: vehicleData.capacityKg,
+          // license_photo_url, insurance_photo_url can be added later
         });
-        if (preSelectedRole === "driver") {
-          router.replace("/onboarding/vehicle");
-        } else if (preSelectedRole === "cargo_owner") {
-          router.replace("/(tabs)");
-        } else {
-          router.replace("/onboarding/role");
-        }
-      } else if (!profile.role) {
-        if (preSelectedRole) {
-          await supabase.from("profiles").update({ role: preSelectedRole }).eq("id", data.user!.id);
-          if (preSelectedRole === "driver") {
-            router.replace("/onboarding/vehicle");
-          } else {
-            router.replace("/(tabs)");
-          }
-        } else {
-          router.replace("/onboarding/role");
-        }
-      } else {
-        router.replace("/(tabs)");
+        if (driverError) throw driverError;
+      } else if (role === 'cargo_owner') {
+        await supabase.from('cargo_owner_profiles').insert({ id: userId });
       }
+
+      // Clear onboarding storage
+      await AsyncStorage.multiRemove(['onboardingRole', 'driverVehicle', 'trialStarted']);
+
+      Alert.alert('Success', 'Your 7-day free trial has started!');
+      router.replace('/(tabs)/job'); // or appropriate start screen
     } catch (err: any) {
-      setError(err.message || "Invalid code. Please try again.");
-      setCode(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
+      Alert.alert('Verification failed', err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResend = async () => {
-    setResendLoading(true);
-    try {
-      if (isDemo) {
-        setCountdown(60);
-        return;
-      }
-      const { error } = await supabase.auth.signInWithOtp({ phone });
-      if (error) throw error;
-      setCountdown(60);
-    } catch (err: any) {
-      setError(err.message || "Failed to resend code");
-    } finally {
-      setResendLoading(false);
-    }
-  };
-
   return (
-    <ScreenBackground>
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.header}>
-            <Logo size={160} style={styles.logo} />
-            <Text style={styles.title}>Verify Your Number</Text>
-            <Text style={styles.subtitle}>
-              Enter the 6-digit code sent to {phone}
-            </Text>
-            {isDemo && (
-              <Text style={styles.demoHint}>Demo number detected — use code 123456</Text>
-            )}
-          </View>
-
-          <View style={styles.codeContainer}>
-            {code.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
-                style={styles.codeInput}
-                keyboardType="number-pad"
-                maxLength={1}
-                value={digit}
-                onChangeText={(text) => handleCodeChange(text, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                editable={!loading}
-                selectTextOnFocus
-              />
-            ))}
-          </View>
-
-          <Button
-            mode="contained"
-            onPress={() => handleVerify(code.join(""))}
-            loading={loading}
-            disabled={loading || code.some((d) => !d)}
-            style={styles.button}
-            contentStyle={styles.buttonContent}
-          >
-            {loading ? "Verifying..." : "Verify"}
-          </Button>
-
-          <View style={styles.resendContainer}>
-            <Text style={styles.resendText}>Didn't receive the code?</Text>
-            {countdown > 0 ? (
-              <Text style={styles.countdown}>Resend in {countdown}s</Text>
-            ) : (
-              <Button
-                mode="text"
-                onPress={handleResend}
-                loading={resendLoading}
-                disabled={resendLoading}
-                textColor={Colors.primary}
-              >
-                Resend Code
-              </Button>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Snackbar
-        visible={!!error}
-        onDismiss={() => setError("")}
-        duration={3000}
-        style={styles.errorSnackbar}
-      >
-        {error}
-      </Snackbar>
-    </SafeAreaView>
-    </ScreenBackground>
+    <View style={styles.container}>
+      <Text style={styles.title}>Verify your phone</Text>
+      <Text style={styles.subtitle}>We sent a code to {phone}</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="6-digit code"
+        keyboardType="number-pad"
+        maxLength={6}
+        value={otp}
+        onChangeText={setOtp}
+      />
+      <TouchableOpacity style={styles.button} onPress={verifyAndComplete} disabled={loading}>
+        <Text style={styles.buttonText}>{loading ? 'Verifying...' : 'Complete →'}</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 24,
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 48,
-  },
-  logo: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-  },
-  codeContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 32,
-  },
-  codeInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderWidth: 2,
-    borderColor: Colors.border,
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
-    color: Colors.text,
-  },
-  button: {
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    marginBottom: 24,
-  },
-  buttonContent: {
-    paddingVertical: 8,
-  },
-  resendContainer: {
-    alignItems: "center",
-  },
-  resendText: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 8,
-  },
-  countdown: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.7)",
-  },
-  errorSnackbar: {
-    backgroundColor: Colors.error,
-  },
-  demoHint: {
-    marginTop: 12,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFD166",
-    textAlign: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "rgba(0,0,0,0.25)",
-    borderRadius: 8,
-  },
+  container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' },
+  title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  subtitle: { textAlign: 'center', marginBottom: 30, color: '#666' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 14, fontSize: 16, marginBottom: 16 },
+  button: { backgroundColor: '#2ecc71', padding: 14, borderRadius: 12, alignItems: 'center' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });
