@@ -1,0 +1,20 @@
+// Mock for expo-notifications to prevent crashes in Expo Go
+export default {
+  addPushTokenListener: () => {},
+  removePushTokenListener: () => {},
+  setNotificationHandler: () => {},
+  getExpoPushTokenAsync: async () => ({ data: 'mock-token' }),
+  addNotificationReceivedListener: () => {},
+  addNotificationResponseReceivedListener: () => {},
+  removeNotificationSubscription: () => {},
+  dismissNotificationAsync: async () => {},
+  dismissAllNotificationsAsync: async () => {},
+  getPresentedNotificationsAsync: async () => [],
+  getBadgeCountAsync: async () => 0,
+  setBadgeCountAsync: async () => true,
+  cancelScheduledNotificationAsync: async () => {},
+  cancelAllScheduledNotificationsAsync: async () => {},
+  scheduleNotificationAsync: async () => 'mock-id',
+  getNextTriggerDateAsync: async () => null,
+  getDevicePushTokenAsync: async () => ({ type: 'ios', data: 'mock-device-token' }),
+};
