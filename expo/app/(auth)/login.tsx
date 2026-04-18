@@ -1,4 +1,3 @@
-// app/(auth)/login.tsx
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { router } from 'expo-router';
@@ -25,7 +24,6 @@ export default function LoginScreen() {
       const formatted = formatPhone(phone);
       const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
       if (error) throw error;
-      // Navigate to verify screen, passing the formatted phone
       router.push({ pathname: '/(auth)/verify', params: { phone: formatted } });
     } catch (err: any) {
       Alert.alert('Error', err.message);
