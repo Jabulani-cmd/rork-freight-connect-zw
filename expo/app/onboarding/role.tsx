@@ -8,7 +8,6 @@ export default function RoleScreen() {
     if (role === 'driver') {
       router.push('/onboarding/vehicle');
     } else {
-      // Cargo owners go directly to auth (login/register)
       router.push('/(auth)/login');
     }
   };
