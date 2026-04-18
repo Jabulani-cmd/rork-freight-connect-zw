@@ -6,6 +6,7 @@ export function usePushNotifications() {
 
   useEffect(() => {
     // Mock implementation – does nothing.
+    // Prevents crashes in Expo Go.
     return () => {};
   }, []);
 
