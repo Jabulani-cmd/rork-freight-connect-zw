@@ -15,7 +15,6 @@ export default function VehicleScreen() {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
-    // Save vehicle info locally for later registration
     await AsyncStorage.setItem('driverVehicle', JSON.stringify({
       vehicleType,
       capacityKg: parseInt(capacity),
@@ -59,22 +58,10 @@ export default function VehicleScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  typeButton: {
-    padding: 12,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
+  typeButton: { padding: 12, backgroundColor: '#f0f0f0', borderRadius: 8, marginBottom: 12, alignItems: 'center' },
   typeButtonActive: { backgroundColor: '#2ecc71' },
   typeText: { fontWeight: '500' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 16 },
   nextButton: { backgroundColor: '#3498db', padding: 14, borderRadius: 8, alignItems: 'center' },
   nextText: { color: '#fff', fontWeight: '600' },
 });
